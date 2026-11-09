@@ -1,2 +1,7 @@
-import { setupRequired } from '../../../../../lib/setup-required';
-export const POST = setupRequired;
+import { handleEventBatch } from '../../../../../lib/api/events';
+import { defaultDeps } from '../../../../../lib/server/deps';
+
+export async function POST(request: Request): Promise<Response> {
+  const { store } = defaultDeps();
+  return handleEventBatch(store, request);
+}

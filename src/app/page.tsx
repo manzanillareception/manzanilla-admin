@@ -1,2 +1,3 @@
-import ControlCenter from '../components/ControlCenter';
-export default function Page() { return <ControlCenter />; }
+import LiveDashboard from '../components/LiveDashboard';
+
+export default function Page() { return <LiveDashboard />; }

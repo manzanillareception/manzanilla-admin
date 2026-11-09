@@ -17,10 +17,13 @@ export const telemetryEventSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...session, kind: z.literal('connection.failed'), code: errorCodeSchema }),
   z.strictObject({ ...base, kind: z.literal('policy.ack'), revision: z.number().int().min(1).max(2_147_483_647) }),
   z.strictObject({ ...base, kind: z.literal('diagnostic.snapshot'), microphone: z.enum(['granted', 'denied', 'unknown']), batteryPercent: z.number().int().min(0).max(100).nullable(), freeMemoryMb: z.number().int().min(0).max(1_048_576).nullable() }),
+  // REV 12 (schemaVersion 2): device-reported update funnel state. Blocked devices may not send it.
+  z.strictObject({ ...base, kind: z.literal('update.status'), feedId: z.string().min(1).max(200), state: z.enum(['up_to_date', 'update_available', 'downloading', 'downloaded', 'installing', 'installed', 'failed']), currentBuild: build, discoveredVersion: z.string().min(1).max(100).nullable(), publishedAt: timestamp.nullable(), progressPct: z.number().int().min(0).max(100).nullable(), error: z.string().min(1).max(500).nullable() }),
 ]);
-export const telemetryEnvelopeSchema = z.strictObject({ schemaVersion: z.literal(1), events: z.array(telemetryEventSchema).min(1).max(100) }).superRefine((envelope, context) => {
+export const telemetryEnvelopeSchema = z.strictObject({ schemaVersion: z.union([z.literal(1), z.literal(2)]), events: z.array(telemetryEventSchema).min(1).max(100) }).superRefine((envelope, context) => {
   const features = new Map<string, string>();
   for (const [index, event] of envelope.events.entries()) {
+    if (event.kind === 'update.status' && envelope.schemaVersion !== 2) context.addIssue({ code: 'custom', path: ['events', index, 'kind'], message: 'update.status requires schemaVersion 2.' });
     if (!('sessionId' in event)) continue;
     const previous = features.get(event.sessionId);
     if (previous && previous !== event.feature) context.addIssue({ code: 'custom', path: ['events', index, 'feature'], message: 'A logical session cannot change feature.' });

@@ -13,3 +13,33 @@
 /* Keep operational status readable at every viewport size. */
 .badge{color:#58634c}.badge-green,.connection{color:#486b36}.badge-amber,.connection-stale{color:#805b13}.badge-red{color:#9c4334}.connection-offline,.connection-unknown{color:#687160}.text-button{color:#96502d}.demo-banner,.demo-banner button,.privacy-card p{color:#656a60}
 .progress-track .progress-fill{margin-left:0}
+
+/* Live-data states (dashboard lane, additive) */
+.status-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg)}
+.status-card{max-width:460px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:36px 32px;text-align:center;box-shadow:var(--shadow)}
+.status-card .detail-icon{margin:0 auto 14px}
+.status-card h1{font-size:22px;margin:0 0 8px;letter-spacing:-.4px}
+.status-card p{color:var(--muted);margin:0 0 18px;line-height:1.5}
+.status-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.status-card .microcopy{margin-top:16px;font-size:12px;color:var(--muted)}
+.live-label i{background:var(--sage)}
+.demo-label-stale i{background:var(--amber)}
+.stale-banner{border-color:var(--amber);background:var(--amber-tint)}
+.panel-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.form-stack{display:flex;flex-direction:column;gap:8px;margin:18px 0}
+.form-error{color:var(--red);font-size:13px;margin:4px 0 0}
+.token-box{display:block;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:14px;font-size:13px;line-height:1.5;user-select:all}
+
+/* Auth pages + update-state rendering (dashboard lane, additive) */
+.auth-card{text-align:left}
+.auth-card .eyebrow{margin-bottom:6px}
+.auth-card h1{margin-bottom:14px}
+.auth-card>.detail-icon{margin:0 0 12px}
+.auth-card>p{line-height:1.6}
+.auth-qr{display:block;margin:10px auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px}
+.auth-card .text-button{display:inline-block;margin-top:12px;background:none;border:none;cursor:pointer;padding:0}
+.update-state{font-weight:600}
+.update-ok{color:#486b36}
+.update-attention{color:#805b13}
+.update-bad{color:#9c4334}
+.update-muted{color:#687160;font-weight:400}
