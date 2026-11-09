@@ -1,6 +1,6 @@
 # Manzanilla mobile integration
 
-Version: API v1, 10 November 2026. Based on the deployed V18 source tree.
+Version: API v1, 10 November 2026. Based on the hardening rollout after V18.
 
 ## Status and configuration
 
@@ -59,7 +59,7 @@ All routes below are POST with JSON and `Authorization: Bearer <deviceCredential
 | `/devices/sessions` | Gate each new managed voice start | 4 KiB | 60/device/minute |
 | `/events/batch` | Usage, failures, diagnostics and update state | 64 KiB | 60 batches/device/minute |
 
-Enrollment has an 8 KiB body cap and 10/IP/minute ceiling. These ceilings are currently per running server instance, not a distributed quota. Respect lower app-side cadences; do not use the ceiling as a polling target.
+Enrollment has an 8 KiB body cap and 10/IP/minute ceiling. These ceilings use shared Postgres fixed windows across server instances. If the limiter is unavailable, protected routes fail closed with retryable 503 `RATE_LIMIT_UNAVAILABLE`. Respect lower app-side cadences; do not use the ceiling as a polling target.
 
 ### Heartbeat
 
@@ -166,7 +166,7 @@ No audio, transcript, caption, prompt, guest identity, room number, provider res
 - 403 `DEVICE_BLOCKED`: stop disallowed events/voice starts; keep permitted diagnostics and policy polling.
 - 409 `INVALID_STATE` / `SESSION_FEATURE_MISMATCH`: fix session lifecycle/IDs, never reopen ended sessions.
 - 429 `RATE_LIMITED`: honor `retryAfterMs` with bounded exponential backoff and jitter.
-- 503 `UNAVAILABLE` / `SETUP_REQUIRED`: fail closed on new starts; retain a bounded offline telemetry queue and retry only retryable failures.
+- 503 `UNAVAILABLE` / `SETUP_REQUIRED` / `RATE_LIMIT_UNAVAILABLE`: fail closed on new starts; retain a bounded offline telemetry queue and retry only retryable failures.
 
 Do not parse human-readable error text as a stable mobile API. No device can supply its own role or hotel scope.
 
