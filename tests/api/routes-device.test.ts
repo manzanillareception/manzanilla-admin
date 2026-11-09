@@ -1,3 +1,4 @@
+vi.mock('../../src/lib/auth/rate-limit', () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true, retryAfterMs: 0 })) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -298,5 +299,29 @@ describe('POST /api/v1/devices/policy-ack', () => {
     state.deviceAuth = scopeFor(store, 'dev-ack2');
     const r = await ackPOST(jsonReq('https://x/api/v1/devices/policy-ack', { revision: 5, bootId: BOOT, sequence: 1 }, { authorization: 'Bearer cred' }));
     expect(r.status).toBe(400);
+  });
+});
+
+import { checkRateLimit } from '../../src/lib/auth/rate-limit';
+describe('distributed limiter failure policy', () => {
+  it('heartbeat fails closed with retryable 503 before reading the body', async () => {
+    store.seedDevice({ id: 'dev-rate' });
+    state.deviceAuth = scopeFor(store, 'dev-rate');
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({ allowed: false, unavailable: true, retryAfterMs: 5000 });
+    const req = jsonReq('https://x/api/v1/devices/heartbeat', {});
+    const r = await heartbeatPOST(req);
+    expect(r.status).toBe(503);
+    expect((await r.json()).error).toMatchObject({ code: 'RATE_LIMIT_UNAVAILABLE', retryable: true, retryAfterMs: 5000 });
+    expect(req.bodyUsed).toBe(false);
+  });
+  it('events return 429 (not 503) for a real exhausted window', async () => {
+    store.seedDevice({ id: 'dev-rate-events', desiredAccess: 'approved', effectiveAccess: 'approved' });
+    state.deviceAuth = scopeFor(store, 'dev-rate-events');
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({ allowed: false, retryAfterMs: 30000 });
+    const req = jsonReq('https://x/api/v1/events/batch', {});
+    const r = await eventsPOST(req);
+    expect(r.status).toBe(429);
+    expect((await r.json()).error.code).toBe('RATE_LIMITED');
+    expect(req.bodyUsed).toBe(false);
   });
 });

@@ -10,8 +10,8 @@ export async function handleHeartbeat(store: ControlStore | null, request: Reque
   const auth = await requireDeviceScope(request);
   if (!auth.ok) return auth.response;
 
-  const limit = checkRateLimit(`device:${auth.scope.deviceId}:heartbeat`, 120, 60_000);
-  if (!limit.allowed) return errorResponse(429, 'RATE_LIMITED', 'Heartbeat rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs });
+  const limit = await checkRateLimit(`device:${auth.scope.deviceId}:heartbeat`, 120, 60_000);
+  if (!limit.allowed) return errorResponse(limit.unavailable ? 503 : 429, limit.unavailable ? 'RATE_LIMIT_UNAVAILABLE' : 'RATE_LIMITED', limit.unavailable ? 'Rate limit service unavailable; retry shortly.' : 'Heartbeat rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs });
 
   const body = await readJsonBody(request, 8 * 1024);
   if (!body.ok) return body.response;

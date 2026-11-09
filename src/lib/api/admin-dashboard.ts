@@ -8,8 +8,8 @@ export async function handleAdminDashboard(store: ControlStore | null, request: 
   const auth = await requireEnabledAdmin(request);
   if (!auth.ok) return auth.response;
 
-  const limit = checkRateLimit(`admin:${auth.admin.userId}:dashboard`, 120, 60_000);
-  if (!limit.allowed) return auth.applyCookies(errorResponse(429, 'RATE_LIMITED', 'Dashboard read rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs }));
+  const limit = await checkRateLimit(`admin:${auth.admin.userId}:dashboard`, 120, 60_000);
+  if (!limit.allowed) return auth.applyCookies(errorResponse(limit.unavailable ? 503 : 429, limit.unavailable ? 'RATE_LIMIT_UNAVAILABLE' : 'RATE_LIMITED', limit.unavailable ? 'Rate limit service unavailable; retry shortly.' : 'Dashboard read rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs }));
 
   const url = new URL(request.url);
   const rawDays = url.searchParams.get('periodDays');

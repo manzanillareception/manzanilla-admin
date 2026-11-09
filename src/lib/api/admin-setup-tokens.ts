@@ -17,8 +17,8 @@ export async function handleMintSetupToken(store: ControlStore | null, request: 
   const auth = await requireEnabledAdmin(request);
   if (!auth.ok) return auth.response;
 
-  const limit = checkRateLimit(`admin:${auth.admin.userId}:setup-tokens`, 30, 60_000);
-  if (!limit.allowed) return auth.applyCookies(errorResponse(429, 'RATE_LIMITED', 'Setup token mint rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs }));
+  const limit = await checkRateLimit(`admin:${auth.admin.userId}:setup-tokens`, 30, 60_000);
+  if (!limit.allowed) return auth.applyCookies(errorResponse(limit.unavailable ? 503 : 429, limit.unavailable ? 'RATE_LIMIT_UNAVAILABLE' : 'RATE_LIMITED', limit.unavailable ? 'Rate limit service unavailable; retry shortly.' : 'Setup token mint rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs }));
 
   const body = await readJsonBody(request, 2 * 1024);
   if (!body.ok) return auth.applyCookies(body.response);

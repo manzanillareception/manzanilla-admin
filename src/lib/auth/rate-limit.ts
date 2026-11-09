@@ -1,30 +1,24 @@
-/**
- * In-process sliding-window rate limiter. Per instance only: sufficient for the
- * single-deployment pilot; not a fleet-wide limit. Keys are caller-chosen
- * (e.g. `device:<id>:heartbeat` or `ip:<addr>:enroll`).
+import { createHash } from 'node:crypto';
+import { createServiceClient, getSupabaseEnv } from '../supabase/server';
+
+export interface RateLimitDecision { allowed: boolean; retryAfterMs: number; unavailable?: boolean }
+
+/** Fleet-wide fixed window in Postgres. No local fallback: all protected routes
+ * return retryable 503 when unavailable, and 429 only for an exhausted bucket.
+ * Heartbeats/events must retry with the same event IDs; outages never grant
+ * access or accept unmetered writes. Session admission stays fail-closed.
  */
-interface Bucket { stamps: number[] }
-const buckets = new Map<string, Bucket>();
-const SWEEP_EVERY = 500;
-let sinceSweep = 0;
-
-export interface RateLimitDecision { allowed: boolean; retryAfterMs: number }
-
-export function checkRateLimit(key: string, limit: number, windowMs: number, now = Date.now()): RateLimitDecision {
-  const bucket = buckets.get(key) ?? { stamps: [] };
-  bucket.stamps = bucket.stamps.filter((t) => now - t < windowMs);
-  buckets.set(key, bucket);
-  if (++sinceSweep >= SWEEP_EVERY) {
-    sinceSweep = 0;
-    for (const [k, b] of buckets) if (b.stamps.every((t) => now - t >= windowMs)) buckets.delete(k);
+export async function checkRateLimit(key: string, limit: number, windowMs: number): Promise<RateLimitDecision> {
+  try {
+    const env = getSupabaseEnv();
+    if (!env) throw new Error('unconfigured');
+    const { data, error } = await createServiceClient(env).rpc('control_check_rate_limit', {
+      p_key: createHash('sha256').update(key).digest('hex'), p_limit: limit, p_window_ms: windowMs,
+    }).abortSignal(AbortSignal.timeout(3000));
+    if (error || !data || typeof data.allowed !== 'boolean' ||
+        !Number.isFinite(data.retry_after_ms) || data.retry_after_ms < 0) throw new Error('unavailable');
+    return { allowed: data.allowed, retryAfterMs: data.retry_after_ms };
+  } catch {
+    return { allowed: false, retryAfterMs: 5000, unavailable: true };
   }
-  if (bucket.stamps.length >= limit) {
-    const oldest = bucket.stamps[0];
-    return { allowed: false, retryAfterMs: Math.max(250, windowMs - (now - oldest)) };
-  }
-  bucket.stamps.push(now);
-  return { allowed: true, retryAfterMs: 0 };
 }
-
-/** Test hook: clear all buckets. */
-export function resetRateLimits(): void { buckets.clear(); sinceSweep = 0; }

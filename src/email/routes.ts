@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { readJsonBody } from "../lib/api/read-body";
+import { checkRateLimit } from "../lib/auth/rate-limit";
 
 /** Local mirror of the backend lane's frozen helper types (src/lib/auth/admin.ts). */
 export type AdminGate = (req: Request) => Promise<{ ok: true; admin: { userId: string }; applyCookies?: (r: Response) => Response } | { ok: false; response: Response }>;
@@ -27,7 +29,11 @@ export interface HotelDeps {
 export async function postAdminHotels(req: Request, d: HotelDeps): Promise<Response> {
   const auth = await d.gate(req);
   if (!auth.ok) return auth.response;
-  const parsed = createHotelBody.safeParse(await req.json().catch(() => null));
+  const limit = await checkRateLimit(`admin:${auth.admin.userId}:create-hotel`, 10, 60_000);
+  if (!limit.allowed) return err(limit.unavailable ? 503 : 429, limit.unavailable ? "RATE_LIMIT_UNAVAILABLE" : "RATE_LIMITED", "Please retry shortly.", true);
+  const body = await readJsonBody(req, 8192);
+  if (!body.ok) return body.response;
+  const parsed = createHotelBody.safeParse(body.raw);
   if (!parsed.success) return err(400, "VALIDATION_FAILED", "Invalid hotel request");
   const { hotelId, jobId, duplicate } = await d.createHotelWithJob({
     hotelName: parsed.data.hotelName, city: parsed.data.city, email: parsed.data.email, adminUserId: auth.admin.userId,
@@ -53,7 +59,11 @@ export async function postHotelRecovery(req: Request, hotelId: string, d: Recove
   const auth = await d.gate(req);
   if (!auth.ok) return auth.response;
   if (!z.string().uuid().safeParse(hotelId).success) return err(400, "VALIDATION_FAILED", "Invalid hotel id");
-  const p = z.object({ mode: z.enum(["guide", "reset_link"]) }).strict().safeParse(await req.json().catch(() => null));
+  const limit = await checkRateLimit(`admin:${auth.admin.userId}:recovery`, 10, 60_000);
+  if (!limit.allowed) return err(limit.unavailable ? 503 : 429, limit.unavailable ? "RATE_LIMIT_UNAVAILABLE" : "RATE_LIMITED", "Please retry shortly.", true);
+  const body = await readJsonBody(req, 2048);
+  if (!body.ok) return body.response;
+  const p = z.object({ mode: z.enum(["guide", "reset_link"]) }).strict().safeParse(body.raw);
   if (!p.success) return err(400, "VALIDATION_FAILED", "Invalid recovery request");
   let r: Awaited<ReturnType<RecoveryDeps["sendRecovery"]>>;
   try { r = await d.sendRecovery(hotelId, p.data.mode, auth.admin.userId); }

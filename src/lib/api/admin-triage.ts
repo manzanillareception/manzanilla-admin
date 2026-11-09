@@ -10,8 +10,8 @@ export async function handleAdminTriage(store: ControlStore | null, request: Req
   const auth = await requireEnabledAdmin(request);
   if (!auth.ok) return auth.response;
 
-  const limit = checkRateLimit(`admin:${auth.admin.userId}:triage`, 60, 60_000);
-  if (!limit.allowed) return auth.applyCookies(errorResponse(429, 'RATE_LIMITED', 'Triage rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs }));
+  const limit = await checkRateLimit(`admin:${auth.admin.userId}:triage`, 60, 60_000);
+  if (!limit.allowed) return auth.applyCookies(errorResponse(limit.unavailable ? 503 : 429, limit.unavailable ? 'RATE_LIMIT_UNAVAILABLE' : 'RATE_LIMITED', limit.unavailable ? 'Rate limit service unavailable; retry shortly.' : 'Triage rate exceeded.', { retryable: true, retryAfterMs: limit.retryAfterMs }));
 
   if (!/^[0-9a-fA-F-]{36}$/.test(incidentId)) {
     return auth.applyCookies(errorResponse(400, 'VALIDATION_FAILED', 'Invalid incident id.'));

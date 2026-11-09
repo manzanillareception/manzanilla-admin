@@ -9,14 +9,17 @@ export function verifyWebhook(
   toleranceSeconds = 300,
 ): boolean {
   const { id, timestamp, signature } = headers;
-  if (!id || !timestamp || !signature) return false;
+  if (!id || id.length > 256 || !timestamp || !/^[0-9]{1,12}$/.test(timestamp) || !signature || signature.length > 4096) return false;
+  const encodedKey = secret.replace(/^whsec_/, "");
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encodedKey)) return false;
   const ts = Number(timestamp);
   if (!Number.isFinite(ts) || Math.abs(nowSeconds - ts) > toleranceSeconds) return false;
-  const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+  const key = Buffer.from(encodedKey, "base64");
+  if (key.length < 16) return false;
   const expected = createHmac("sha256", key).update(`${id}.${timestamp}.${rawBody}`).digest();
   return signature.split(" ").some((part) => {
     const [v, sig] = part.split(",");
-    if (v !== "v1" || !sig) return false;
+    if (v !== "v1" || !sig || !/^[A-Za-z0-9+/]{43}=$/.test(sig)) return false;
     const got = Buffer.from(sig, "base64");
     return got.length === expected.length && timingSafeEqual(got, expected);
   });

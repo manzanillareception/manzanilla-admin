@@ -29,8 +29,8 @@ export function generateDeviceCredential(): string {
  */
 export async function handleEnroll(store: ControlStore | null, request: Request): Promise<Response> {
   if (!store) return errorResponse(503, 'SETUP_REQUIRED', 'Enrollment is not configured.');
-  const limit = checkRateLimit(`ip:${clientIp(request)}:enroll`, 10, 60_000);
-  if (!limit.allowed) return errorResponse(429, 'RATE_LIMITED', 'Too many enrollment attempts.', { retryable: true, retryAfterMs: limit.retryAfterMs });
+  const limit = await checkRateLimit(`ip:${clientIp(request)}:enroll`, 10, 60_000);
+  if (!limit.allowed) return errorResponse(limit.unavailable ? 503 : 429, limit.unavailable ? 'RATE_LIMIT_UNAVAILABLE' : 'RATE_LIMITED', limit.unavailable ? 'Rate limit service unavailable; retry shortly.' : 'Too many enrollment attempts.', { retryable: true, retryAfterMs: limit.retryAfterMs });
 
   const body = await readJsonBody(request, 8 * 1024);
   if (!body.ok) return body.response;

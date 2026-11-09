@@ -18,8 +18,8 @@ export async function POST(request: Request): Promise<Response> {
       return errorResponse(403, "FORBIDDEN", "Cross-origin request rejected.");
     }
   }
-  const limit = checkRateLimit(`ip:${clientIp(request)}:alerts-run`, 10, 60_000);
-  if (!limit.allowed) return errorResponse(429, "RATE_LIMITED", "Too many worker runs.", { retryable: true, retryAfterMs: limit.retryAfterMs });
+  const limit = await checkRateLimit(`ip:${clientIp(request)}:alerts-run`, 10, 60_000);
+  if (!limit.allowed) return errorResponse(limit.unavailable ? 503 : 429, limit.unavailable ? "RATE_LIMIT_UNAVAILABLE" : "RATE_LIMITED", "Please retry worker run shortly.", { retryable: true, retryAfterMs: limit.retryAfterMs });
   // MFA: requireEnabledAdmin enforces aal2 whenever the environment requires MFA (contract rev7).
   const auth = await requireEnabledAdmin(request);
   if (!auth.ok) return auth.response;

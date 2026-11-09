@@ -1,3 +1,4 @@
+vi.mock('../../src/lib/auth/rate-limit', () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true, retryAfterMs: 0 })) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -229,4 +230,14 @@ describe('GET /api/v1/admin/dashboard', () => {
     r = await dashboardGET(new Request('https://x/api/v1/admin/dashboard'));
     expect(r.status).toBe(503);
   });
+});
+
+import { checkRateLimit } from '../../src/lib/auth/rate-limit';
+it('distributed limiter outage refuses admin mutation before body read', async () => {
+  vi.mocked(checkRateLimit).mockResolvedValueOnce({ allowed: false, unavailable: true, retryAfterMs: 5000 });
+  const req = jsonReq(`https://x/api/v1/admin/devices/${DEVICE}/policy`, {});
+  const r = await policyPOST(req, ctx({ deviceId: DEVICE }));
+  expect(r.status).toBe(503);
+  expect((await r.json()).error.code).toBe('RATE_LIMIT_UNAVAILABLE');
+  expect(req.bodyUsed).toBe(false);
 });

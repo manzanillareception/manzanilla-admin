@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { errorResponse } from '../auth/errors';
 
 export type BodyRead = { ok: true; raw: unknown; text: string } | { ok: false; response: Response };
@@ -52,8 +53,12 @@ export async function readJsonBody(request: Request, maxBytes: number, opts?: { 
   }
 }
 
+/** Only Vercel's overwritten platform header is eligible on a Vercel deployment.
+ * Never trust caller-controlled x-forwarded-for / x-real-ip. Without trusted
+ * platform evidence callers share one bucket (conservative, not a bypass).
+ */
 export function clientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim().slice(0, 64) || 'unknown';
-  return request.headers.get('x-real-ip')?.slice(0, 64) ?? 'unknown';
+  if (process.env.VERCEL !== '1') return 'unknown';
+  const value = request.headers.get('x-vercel-forwarded-for')?.trim();
+  return value && isIP(value) ? value : 'unknown';
 }

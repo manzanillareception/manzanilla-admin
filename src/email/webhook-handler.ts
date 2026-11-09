@@ -24,14 +24,20 @@ export async function handleResendWebhook(
   if (!verifyWebhook(secret, headers, rawBody, Math.floor(now / 1000))) return { status: 401, body: { ok: false } };
   let evt: { type?: unknown; data?: { email_id?: unknown } };
   try { evt = JSON.parse(rawBody); } catch { return { status: 400, body: { ok: false } }; }
+  if (!evt || typeof evt !== "object" || Array.isArray(evt)) return { status: 400, body: { ok: false } };
   const state = typeof evt.type === "string" ? eventToState(evt.type) : null;
   const mid = evt.data?.email_id;
-  if (!state || typeof mid !== "string") return { status: 200, body: { ok: true, reason: "ignored" } };
+  if (!state || typeof mid !== "string" || !mid || mid.length > 256) return { status: 200, body: { ok: true, reason: "ignored" } };
   // Apply first, record the id after: a crash between the two means a harmless re-apply
   // (advance is monotonic), never a lost event.
-  const result = await store.advance(mid, state, new Date(now));
-  // Unknown id: the send path inserts the row at provider acceptance; Resend should retry.
-  if (result === null) return { status: 500, body: { ok: false, reason: "unknown_message_retry" } };
-  if (!(await store.markSeen(headers.id as string))) return { status: 200, body: { ok: true, reason: "duplicate" } };
-  return { status: 200, body: { ok: true } };
+  try {
+    const result = await store.advance(mid, state, new Date(now));
+    // Unknown id: the send path inserts the row at provider acceptance; Resend should retry.
+    if (result === null) return { status: 500, body: { ok: false, reason: "unknown_message_retry" } };
+    if (!(await store.markSeen(headers.id as string))) return { status: 200, body: { ok: true, reason: "duplicate" } };
+    return { status: 200, body: { ok: true } };
+  } catch {
+    // Do not expose provider IDs or database diagnostics; ask provider to retry.
+    return { status: 503, body: { ok: false, reason: "storage_unavailable_retry" } };
+  }
 }
