@@ -1,0 +1,10 @@
+import { build } from 'esbuild';
+import { mkdir, writeFile } from 'node:fs/promises';
+const result = await build({ entryPoints: ['src/preview-entry.tsx'], bundle: true, write: false, outdir: 'dist', minify: true, define: { 'process.env.NODE_ENV': '"production"' }, loader: { '.tsx': 'tsx' }, target: ['es2022'] });
+const js = result.outputFiles.find(file => file.path.endsWith('.js'))?.text;
+const css = result.outputFiles.find(file => file.path.endsWith('.css'))?.text;
+if (!js || !css) throw new Error('Preview build must include the shared UI and CSS.');
+const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src data:; base-uri 'none'; form-action 'none'"><title>Manzanilla — local admin mockup</title><style>${css.replaceAll('</style', '<\\/style')}</style></head><body><div id="root"></div><script>${js.replaceAll('</script', '<\\/script')}</script></body></html>`;
+await mkdir('dist', { recursive: true });
+await writeFile('dist/manzanilla-admin-mockup.html', html);
+console.log('Built dist/manzanilla-admin-mockup.html from the shared React UI. No network connections allowed.');

@@ -1,0 +1,32 @@
+name: Prepare disconnected repair intake
+on:
+  workflow_dispatch:
+    inputs:
+      incident_id:
+        description: 'Incident reference only (INC-1042). No logs, URLs or instructions.'
+        required: true
+        default: INC-1042
+        type: string
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+      - name: Validate reference and create intake template
+        env:
+          INCIDENT_ID: ${{ inputs.incident_id }}
+        run: node scripts/repair-brief.mjs "$INCIDENT_ID"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: disconnected-repair-intake
+          path: dist/repair-intake.json
+          if-no-files-found: error
+          retention-days: 7
